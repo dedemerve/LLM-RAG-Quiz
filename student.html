@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM & RAG — Seminer Quiz | Arş. Gör. Merve DEDE</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Unbounded:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0a1628;
+    --navy-mid: #0f2044;
+    --gold: #f5c842;
+    --gold-dim: #c9a420;
+    --cyan: #00d4ff;
+    --cyan-dim: #0099bb;
+    --white: #f0f4ff;
+    --gray: #8899bb;
+    --red: #ff4455;
+    --correct: #00e676;
+    --wrong: #ff1744;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--navy);
+    color: var(--white);
+    font-family: 'Space Grotesk', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  .bg-grid {
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+  }
+  .bg-glow {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 40% at 20% 20%, rgba(0,212,255,0.08) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 50% at 80% 80%, rgba(245,200,66,0.06) 0%, transparent 70%);
+  }
+  .screen {
+    position: relative; z-index: 1;
+    min-height: 100vh;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    animation: fadeIn .45s ease;
+  }
+  .screen.active { display: flex; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+
+  /* ── WELCOME ── */
+  #screen-welcome { text-align: center; gap: 1.75rem; }
+  .welcome-title {
+    font-family: 'Unbounded', sans-serif;
+    font-size: clamp(1.8rem, 5vw, 3.2rem);
+    font-weight: 900; line-height: 1.1;
+    background: linear-gradient(135deg, var(--white) 0%, var(--cyan) 55%, var(--gold) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .welcome-subtitle { font-size: 1rem; color: var(--gray); max-width: 500px; line-height: 1.7; }
+  .instructor-card {
+    display: flex; align-items: center; gap: 1rem;
+    background: var(--navy-mid);
+    border: 1px solid rgba(0,212,255,.2);
+    border-radius: 12px; padding: 1rem 1.5rem;
+  }
+  .instructor-avatar {
+    width: 46px; height: 46px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--cyan), var(--gold));
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Unbounded', sans-serif; font-size: 1rem; color: var(--navy);
+    font-weight: 900; flex-shrink: 0;
+  }
+  .instructor-name { font-weight: 600; font-size: .95rem; }
+  .instructor-role { font-size: .78rem; color: var(--gray); margin-top: .15rem; }
+
+  /* Name input */
+  .name-wrap { display: flex; flex-direction: column; gap: .6rem; width: 100%; max-width: 360px; }
+  .name-label { font-size: .82rem; color: var(--gray); font-family: 'JetBrains Mono', monospace; }
+  .name-input {
+    background: var(--navy-mid);
+    border: 1.5px solid rgba(0,212,255,.3);
+    border-radius: 10px; padding: .85rem 1.1rem;
+    color: var(--white); font-family: 'Space Grotesk', sans-serif; font-size: 1rem;
+    outline: none; width: 100%;
+    transition: border-color .2s;
+  }
+  .name-input:focus { border-color: var(--cyan); }
+  .name-input::placeholder { color: var(--gray); }
+
+  .btn-primary {
+    font-family: 'Unbounded', sans-serif;
+    font-size: .85rem; font-weight: 700; letter-spacing: .04em;
+    padding: 1rem 2.5rem; border-radius: 8px; border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--cyan), var(--cyan-dim));
+    color: var(--navy);
+    transition: transform .15s, box-shadow .15s;
+    box-shadow: 0 0 32px rgba(0,212,255,.3);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 48px rgba(0,212,255,.45); }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+  /* ── QUIZ ── */
+  #screen-quiz {
+    gap: 1.75rem; padding-top: 4rem;
+    max-width: 780px; margin: 0 auto; width: 100%;
+  }
+  .quiz-progress { width: 100%; display: flex; flex-direction: column; gap: .5rem; }
+  .progress-label {
+    display: flex; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace; font-size: .8rem; color: var(--gray);
+  }
+  .progress-label .q-num { color: var(--white); font-weight: 700; }
+  .progress-bar-track { height: 4px; background: rgba(255,255,255,.1); border-radius: 99px; overflow: hidden; }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--cyan), var(--gold));
+    border-radius: 99px; transition: width .4s ease;
+  }
+  .timer-ring { position: relative; width: 84px; height: 84px; flex-shrink: 0; }
+  .timer-ring svg { width: 84px; height: 84px; transform: rotate(-90deg); }
+  .timer-bg { fill: none; stroke: rgba(255,255,255,.1); stroke-width: 5; }
+  .timer-arc {
+    fill: none; stroke: var(--cyan); stroke-width: 5; stroke-linecap: round;
+    stroke-dasharray: 245; stroke-dashoffset: 0;
+    transition: stroke-dashoffset .9s linear, stroke .3s;
+  }
+  .timer-num {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-family: 'Unbounded', sans-serif; font-size: 1.2rem; font-weight: 900; color: var(--white);
+  }
+  .timer-ring.urgent .timer-arc { stroke: var(--red); }
+  .timer-ring.urgent .timer-num { color: var(--red); }
+  .q-card {
+    background: var(--navy-mid);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 20px; padding: 1.75rem;
+    width: 100%; display: flex; gap: 1.5rem; align-items: flex-start;
+  }
+  .q-body { flex: 1; }
+  .q-text { font-size: 1.1rem; font-weight: 600; line-height: 1.5; margin-bottom: 1.4rem; }
+  .options { display: flex; flex-direction: column; gap: .65rem; }
+  .opt-btn {
+    display: flex; align-items: center; gap: .9rem;
+    background: rgba(255,255,255,.04);
+    border: 1.5px solid rgba(255,255,255,.12);
+    border-radius: 10px; padding: .8rem 1.1rem;
+    cursor: pointer; color: var(--white);
+    font-family: 'Space Grotesk', sans-serif; font-size: .92rem;
+    text-align: left; width: 100%;
+    transition: border-color .2s, background .2s, transform .12s;
+  }
+  .opt-btn:hover:not(:disabled) {
+    border-color: var(--cyan); background: rgba(0,212,255,.08); transform: translateX(4px);
+  }
+  .opt-btn:disabled { cursor: default; }
+  .opt-key {
+    font-family: 'JetBrains Mono', monospace; font-size: .72rem;
+    background: rgba(255,255,255,.1); border-radius: 4px;
+    padding: .18rem .48rem; flex-shrink: 0; color: var(--gray);
+  }
+  .transition-msg {
+    text-align: center; font-size: .85rem; color: var(--cyan);
+    font-family: 'JetBrains Mono', monospace;
+    animation: fadeIn .3s ease;
+    min-height: 1.4rem;
+  }
+
+  /* ── RESULTS ── */
+  #screen-results {
+    gap: 2rem; padding: 4rem 2rem 3rem;
+    max-width: 860px; margin: 0 auto; width: 100%;
+    align-items: stretch;
+  }
+  .results-header { text-align: center; }
+  .results-title {
+    font-family: 'Unbounded', sans-serif;
+    font-size: clamp(1.4rem, 4vw, 2.3rem); font-weight: 900; margin-bottom: .4rem;
+    background: linear-gradient(135deg, var(--white), var(--gold));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .results-sub { color: var(--gray); font-size: .92rem; }
+  .score-donut-wrap {
+    display: flex; justify-content: center; align-items: center; gap: 2.5rem; flex-wrap: wrap;
+  }
+  .donut-container { position: relative; width: 140px; height: 140px; }
+  .donut-container svg { width: 140px; height: 140px; transform: rotate(-90deg); }
+  .donut-bg { fill: none; stroke: rgba(255,255,255,.1); stroke-width: 12; }
+  .donut-fill {
+    fill: none; stroke-width: 12; stroke-linecap: round;
+    stroke-dasharray: 440; stroke-dashoffset: 440;
+    transition: stroke-dashoffset 1.4s cubic-bezier(.4,0,.2,1);
+  }
+  .donut-label {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .donut-pct { font-family: 'Unbounded', sans-serif; font-size: 1.8rem; font-weight: 900; }
+  .donut-desc { font-size: .68rem; color: var(--gray); text-align: center; margin-top: .15rem; }
+
+  .breakdown-card {
+    background: var(--navy-mid);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 16px; padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .bc-top {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: .6rem;
+  }
+  .bc-qnum {
+    font-family: 'JetBrains Mono', monospace; font-size: .72rem; color: var(--cyan);
+  }
+  .bc-question { font-weight: 600; font-size: .98rem; margin-bottom: 1rem; line-height: 1.45; }
+  .bc-options { margin-bottom: .9rem; }
+  .bc-opt {
+    display: flex; align-items: center; gap: .7rem;
+    padding: .45rem .8rem; border-radius: 7px;
+    border: 1.5px solid rgba(255,255,255,.1);
+    background: rgba(255,255,255,.03);
+    margin-bottom: .35rem; font-size: .83rem;
+  }
+  .bc-opt.correct-opt { border-color: var(--correct); background: rgba(0,230,118,.1); }
+  .bc-opt.wrong-opt { border-color: var(--wrong); background: rgba(255,23,68,.08); }
+  .bc-key {
+    font-family: 'JetBrains Mono', monospace; font-size: .68rem;
+    background: rgba(255,255,255,.1); border-radius: 3px;
+    padding: .12rem .42rem; color: var(--gray); flex-shrink: 0;
+  }
+  .bc-opt.correct-opt .bc-key { background: var(--correct); color: var(--navy); }
+  .bc-opt.wrong-opt .bc-key { background: var(--wrong); color: white; }
+  .bc-explain {
+    font-size: .84rem; color: var(--gray); line-height: 1.6;
+    padding: .7rem .9rem;
+    border-left: 3px solid;
+    border-radius: 0 7px 7px 0;
+    background: rgba(255,255,255,.03);
+    margin-bottom: .6rem;
+  }
+  .bc-rag {
+    font-size: .78rem; color: var(--cyan);
+    background: rgba(0,212,255,.07);
+    border: 1px solid rgba(0,212,255,.2);
+    border-radius: 7px; padding: .55rem .85rem;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  .results-footer {
+    text-align: center; padding-top: 1rem;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .footer-info { font-size: .78rem; color: var(--gray); margin-bottom: .75rem; }
+  .footer-links { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; }
+  .footer-link {
+    font-size: .8rem; color: var(--cyan);
+    text-decoration: none; border-bottom: 1px solid rgba(0,212,255,.3);
+    padding-bottom: 2px;
+  }
+  .footer-link:hover { border-color: var(--cyan); }
+
+  @media (max-width: 600px) {
+    .q-card { flex-direction: column; }
+    .score-donut-wrap { gap: 1.25rem; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+
+<!-- ══ WELCOME ══ -->
+<div class="screen active" id="screen-welcome">
+  <h1 class="welcome-title">Yapay Zekâya<br>Bilgi Aramayı Öğretmek</h1>
+  <p class="welcome-subtitle">
+    LLM ve RAG teknolojilerine geçmeden önce 5 kısa soruyla düşünme biçimimizi test edelim.
+  </p>
+  <div class="instructor-card">
+    <div class="instructor-avatar">MD</div>
+    <div>
+      <div class="instructor-name">Arş. Gör. Merve DEDE</div>
+      <div class="instructor-role">İstanbul Beykent Üniversitesi</div>
+    </div>
+  </div>
+
+  <div class="name-wrap">
+    <div class="name-label">// Adınızı girin (opsiyonel)</div>
+    <input class="name-input" id="name-input" type="text"
+           placeholder="Adınız Soyadınız" maxlength="40"
+           onkeydown="if(event.key==='Enter') startQuiz()">
+  </div>
+
+  <button class="btn-primary" onclick="startQuiz()">Teste Başla →</button>
+</div>
+
+<!-- ══ QUIZ ══ -->
+<div class="screen" id="screen-quiz">
+  <div class="quiz-progress">
+    <div class="progress-label">
+      <span class="q-num" id="q-label">Soru 1 / 5</span>
+      <span id="q-topic" style="color:var(--cyan);font-size:.75rem;font-family:'JetBrains Mono',monospace;"></span>
+    </div>
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="q-card">
+    <div class="timer-ring" id="timer-ring">
+      <svg viewBox="0 0 90 90">
+        <circle class="timer-bg" cx="45" cy="45" r="39"/>
+        <circle class="timer-arc" id="timer-arc" cx="45" cy="45" r="39"/>
+      </svg>
+      <div class="timer-num" id="timer-num">15</div>
+    </div>
+    <div class="q-body">
+      <div class="q-text" id="q-text">...</div>
+      <div class="options" id="options-wrap"></div>
+      <div class="transition-msg" id="transition-msg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ RESULTS ══ -->
+<div class="screen" id="screen-results">
+  <div class="results-header">
+    <div class="results-title" id="results-title">Sonuçlar</div>
+    <div class="results-sub" id="results-sub"></div>
+  </div>
+
+  <div class="score-donut-wrap">
+    <div class="donut-container">
+      <svg viewBox="0 0 140 140">
+        <circle class="donut-bg" cx="70" cy="70" r="56"/>
+        <circle class="donut-fill" style="stroke:var(--correct)" id="donut-correct" cx="70" cy="70" r="56"/>
+      </svg>
+      <div class="donut-label">
+        <div class="donut-pct" id="pct-correct" style="color:var(--correct)">0%</div>
+        <div class="donut-desc">Doğru</div>
+      </div>
+    </div>
+    <div class="donut-container">
+      <svg viewBox="0 0 140 140">
+        <circle class="donut-bg" cx="70" cy="70" r="56"/>
+        <circle class="donut-fill" style="stroke:var(--wrong)" id="donut-wrong" cx="70" cy="70" r="56"/>
+      </svg>
+      <div class="donut-label">
+        <div class="donut-pct" id="pct-wrong" style="color:var(--wrong)">0%</div>
+        <div class="donut-desc">Yanlış</div>
+      </div>
+    </div>
+    <div class="donut-container">
+      <svg viewBox="0 0 140 140">
+        <circle class="donut-bg" cx="70" cy="70" r="56"/>
+        <circle class="donut-fill" style="stroke:var(--gold)" id="donut-timeout" cx="70" cy="70" r="56"/>
+      </svg>
+      <div class="donut-label">
+        <div class="donut-pct" id="pct-timeout" style="color:var(--gold)">0%</div>
+        <div class="donut-desc">Süre<br>Doldu</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="breakdown-wrap"></div>
+
+  <div class="results-footer">
+    <div class="footer-info">Arş. Gör. Merve DEDE</div>
+    <div class="footer-links">
+      <a class="footer-link" href="https://github.com/dedemerve/ILSA-LLM-Extractor" target="_blank">GitHub: ILSA-LLM-Extractor</a>
+      <a class="footer-link" href="https://linkedin.com/in/dedemerve" target="_blank">LinkedIn</a>
+      <a class="footer-link" href="https://orcid.org/0009-0006-8267-1714" target="_blank">ORCID</a>
+    </div>
+  </div>
+</div>
+
+<script>
+const QUESTIONS = [
+  {
+    id: 1, time: 15,
+    text: "5 makine, 5 işi 5 dakikada yapıyorsa; 100 makine 100 işi kaç dakikada yapar?",
+    options: ["5 dakika", "100 dakika", "20 dakika", "500 dakika"],
+    correct: 0,
+    explain: "Her makine 5 dakikada 1 iş yapıyor. 100 makine aynı anda çalışır, toplam süre değişmez: 5 dakika.",
+    rag: "LLM de '5→5→5, 100→100→?' örüntüsünde 100 üretir. Sayısal örüntüyü taklit eder, arkasındaki mantığı görmez. Yorumu insan yapar."
+  },
+  {
+    id: 2, time: 15,
+    text: "Bir kalem ve bir defter toplam 110 TL. Defter, kalemden 100 TL daha pahalı. Kalem kaç TL?",
+    options: ["10 TL", "5 TL", "15 TL", "20 TL"],
+    correct: 1,
+    explain: "Kalem = x, defter = x + 100. Toplam: x + (x + 100) = 110 → 2x = 10 → x = 5 TL. İlk akla gelen 10 TL, ama defter o zaman 110 TL olur — toplam 120 TL eder, tutmaz.",
+    rag: "LLM '110 - 100 = 10' kestirmesini üretir; denklemi kurmaz. Yapay zeka hızlı ve sezgisel yanıt verir — doğrulama yine insanın işi."
+  },
+  {
+    id: 3, time: 15,
+    text: "Adil bir madeni para 10 kez üst üste yazı geldi. 11. atışta tura gelme olasılığı nedir?",
+    options: ["%50'den fazla — artık tura 'sırası geldi'", "Tam %50 — önceki atışlar bağımsız", "%50'den az — yazı serisi devam eder", "Hesaplanamaz"],
+    correct: 1,
+    explain: "Her atış bağımsız bir olaydır, paranın hafızası yoktur. 10 yazı gelmesi 11. atışı hiç etkilemez.",
+    rag: "İnsanlar örüntü görünce anlam yükler — LLM'ler de böyle çalışır. Sık tekrarlanan dizilerin \"devamını bekler\". Olasılık yorumunu araştırmacı yapmalıdır."
+  },
+  {
+    id: 4, time: 10,
+    text: "Bir yarışta ikinciyi geçersen kaçıncı olursun?",
+    options: ["Birinci", "İkinci", "Üçüncü", "Geçemezsin"],
+    correct: 1,
+    explain: "İkinciyi geçince onun yerine geçersin — ikinci olursun. Birinci hâlâ önünde.",
+    rag: "Hızlı okunan kısa sorular sezgisel cevap ürettirir. LLM de kısa girdilerde sezgisel — yani en olası — yanıtı üretir. Prompt ne kadar kısa olursa hata riski o kadar artar."
+  },
+  {
+    id: 5, time: 15,
+    text: "Meryem'in annesinin dört çocuğu var: Nisan, Mayıs, Haziran ve ...?",
+    options: ["Temmuz", "Meryem", "Temmuz ya da Ağustos", "Bilgi yetersiz"],
+    correct: 1,
+    explain: "Soru \"Meryem'in annesi\" ile başlıyor. Annesinin bir çocuğu zaten Meryem. Dördüncü çocuk Meryem'in kendisi.",
+    rag: "LLM sorunun başındaki \"Meryem\" bağlamını kaybeder, ay örüntüsüne takılır ve \"Temmuz\" üretir. RAG da bağlamı kaybedebilir — hangi belge parçasının alındığı kritiktir."
+  }
+];
+
+// ── State ────────────────────────────────────────────────────────────────────
+let currentQ  = 0;
+let timerInterval = null;
+let timeLeft  = 0;
+let results   = [];
+let studentId = "anon_" + Math.random().toString(36).slice(2, 7);
+
+// Server base URL — auto-detect from current origin
+const SERVER = window.location.origin;
+
+// ── Answer submission ────────────────────────────────────────────────────────
+async function submitAnswer(questionIndex, choiceIndex, timedOut) {
+  try {
+    await fetch(SERVER + "/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student_id:     studentId,
+        question_index: questionIndex,
+        choice_index:   choiceIndex,
+        timed_out:      timedOut,
+      }),
+    });
+  } catch (_) {
+    // Sunucuya ulaşılamazsa quiz devam eder, sadece log kaydedilmez
+    console.warn("Sunucuya bağlanılamadı — cevap kaydedilmedi.");
+  }
+}
+
+// ── Quiz ─────────────────────────────────────────────────────────────────────
+function startQuiz() {
+  const nameVal = document.getElementById('name-input').value.trim();
+  if (nameVal) studentId = nameVal;
+  currentQ = 0; results = [];
+  showScreen('screen-quiz');
+  loadQuestion();
+}
+
+function loadQuestion() {
+  const q     = QUESTIONS[currentQ];
+  const total = QUESTIONS.length;
+
+  document.getElementById('q-label').textContent  = `Soru ${currentQ+1} / ${total}`;
+  document.getElementById('progress-fill').style.width = `${(currentQ / total) * 100}%`;
+  document.getElementById('q-text').textContent   = q.text;
+  document.getElementById('transition-msg').textContent = '';
+
+  const wrap = document.getElementById('options-wrap');
+  wrap.innerHTML = '';
+  const keys = ['A','B','C','D'];
+  q.options.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'opt-btn';
+    btn.innerHTML = `<span class="opt-key">${keys[i]}</span>${opt}`;
+    btn.onclick   = () => selectAnswer(i);
+    wrap.appendChild(btn);
+  });
+
+  startTimer(q.time);
+}
+
+function startTimer(seconds) {
+  clearInterval(timerInterval);
+  timeLeft = seconds;
+  const total = seconds;
+  const arc  = document.getElementById('timer-arc');
+  const ring = document.getElementById('timer-ring');
+  const circ = 245;
+  updateTimer(timeLeft, total, arc, ring, circ);
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    updateTimer(timeLeft, total, arc, ring, circ);
+    if (timeLeft <= 0) { clearInterval(timerInterval); timeOut(); }
+  }, 1000);
+}
+
+function updateTimer(t, total, arc, ring, circ) {
+  document.getElementById('timer-num').textContent = t;
+  arc.style.strokeDashoffset = circ - (t / total) * circ;
+  if (t <= Math.ceil(total * 0.3)) ring.classList.add('urgent');
+  else ring.classList.remove('urgent');
+}
+
+function selectAnswer(idx) {
+  clearInterval(timerInterval);
+  const q    = QUESTIONS[currentQ];
+  const btns = document.querySelectorAll('.opt-btn');
+  btns.forEach(b => b.disabled = true);
+  btns[idx].style.borderColor = 'var(--cyan)';
+  btns[idx].style.background  = 'rgba(0,212,255,0.12)';
+  const isCorrect = idx === q.correct;
+  results.push({ correct: isCorrect, timedOut: false, chosen: idx });
+  submitAnswer(currentQ, idx, false);
+  advance();
+}
+
+function timeOut() {
+  const btns = document.querySelectorAll('.opt-btn');
+  btns.forEach(b => b.disabled = true);
+  results.push({ correct: false, timedOut: true, chosen: -1 });
+  submitAnswer(currentQ, -1, true);
+  advance();
+}
+
+function advance() {
+  const isLast = currentQ >= QUESTIONS.length - 1;
+  const msg = document.getElementById('transition-msg');
+  msg.textContent = isLast ? '✓ Tamamlandı! Sonuçlar yükleniyor...' : '→ Sonraki soru...';
+  setTimeout(() => {
+    currentQ++;
+    if (currentQ < QUESTIONS.length) loadQuestion();
+    else showResults();
+  }, isLast ? 900 : 600);
+}
+
+// ── Results ──────────────────────────────────────────────────────────────────
+function showResults() {
+  showScreen('screen-results');
+  const total   = results.length;
+  const correct = results.filter(r => r.correct).length;
+  const timedOut = results.filter(r => r.timedOut).length;
+  const wrong   = total - correct - timedOut;
+
+  const pctC = Math.round(correct  / total * 100);
+  const pctW = Math.round(wrong    / total * 100);
+  const pctT = Math.round(timedOut / total * 100);
+
+  const labels = ['🤔 İpleri Sıkı Tut!', '👍 Fena Değil!', '💡 İyi Gidiyorsun!', '🎯 Çok İyi!', '🏆 Mükemmel!', '🏆 Mükemmel!'];
+  document.getElementById('results-title').textContent = labels[correct] || '🏆 Mükemmel!';
+  document.getElementById('results-sub').textContent   = `${correct}/${total} doğru yanıt — %${pctC} başarı`;
+
+  const circ = 351;
+  setTimeout(() => {
+    setDonut('donut-correct', pctC, circ);
+    setDonut('donut-wrong',   pctW, circ);
+    setDonut('donut-timeout', pctT, circ);
+    document.getElementById('pct-correct').textContent = `%${pctC}`;
+    document.getElementById('pct-wrong').textContent   = `%${pctW}`;
+    document.getElementById('pct-timeout').textContent = `%${pctT}`;
+  }, 200);
+
+  const wrap = document.getElementById('breakdown-wrap');
+  wrap.innerHTML = '';
+  const keys = ['A','B','C','D'];
+
+  QUESTIONS.forEach((q, i) => {
+    const r = results[i];
+    const statusColor = r.correct ? 'var(--correct)' : r.timedOut ? 'var(--gold)' : 'var(--wrong)';
+    const statusText  = r.correct ? '✓ Doğru' : r.timedOut ? '⏱ Süre Doldu' : '✗ Yanlış';
+
+    let optsHtml = '';
+    q.options.forEach((opt, oi) => {
+      const isCorrect = oi === q.correct;
+      const isChosen  = oi === r.chosen;
+      let cls = '';
+      if (isCorrect) cls = 'correct-opt';
+      else if (isChosen && !r.correct) cls = 'wrong-opt';
+      const icon = isCorrect ? ' ✓' : (isChosen && !r.correct ? ' ✗' : '');
+      optsHtml += `<div class="bc-opt ${cls}"><span class="bc-key">${keys[oi]}</span>${opt}${icon}</div>`;
+    });
+
+    wrap.innerHTML += `
+      <div class="breakdown-card">
+        <div class="bc-top">
+          <span class="bc-qnum">SORU ${i+1} · ${q.time} sn</span>
+          <span style="font-size:.82rem;font-weight:700;color:${statusColor}">${statusText}</span>
+        </div>
+        <div class="bc-question">${q.text}</div>
+        <div class="bc-options">${optsHtml}</div>
+        <div class="bc-explain" style="border-color:${statusColor}">${q.explain}</div>
+        <div class="bc-rag">💡 ${q.rag}</div>
+      </div>
+    `;
+  });
+}
+
+function setDonut(id, pct, circ) {
+  const el = document.getElementById(id);
+  el.style.strokeDasharray  = circ;
+  el.style.strokeDashoffset = circ - (pct / 100) * circ;
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+</script>
+</body>
+</html>

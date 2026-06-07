@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Presenter View — LLM & RAG Quiz</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Unbounded:wght@700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+:root {
+  --navy:#0a1628; --mid:#0f2044; --panel:#111d38;
+  --cyan:#00d4ff; --gold:#f5c842; --green:#00e676; --red:#ff1744; --gray:#8899bb; --white:#f0f4ff;
+  --A:#00d4ff; --B:#a78bfa; --C:#f59e0b; --D:#f87171; --TO:#4b5563;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--navy);color:var(--white);font-family:'Space Grotesk',sans-serif;min-height:100vh}
+.bg-grid{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(0,212,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03) 1px,transparent 1px);background-size:48px 48px}
+
+/* HEADER */
+header{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:.9rem 1.5rem;background:rgba(10,22,40,.9);border-bottom:1px solid rgba(0,212,255,.15);backdrop-filter:blur(8px);gap:1rem;flex-wrap:wrap}
+.header-title{font-family:'Unbounded',sans-serif;font-size:.9rem;font-weight:900;background:linear-gradient(135deg,var(--white),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header-meta{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}
+.meta-chip{font-family:'JetBrains Mono',monospace;font-size:.75rem;padding:.3rem .7rem;border-radius:99px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04)}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gray);margin-right:.4rem;transition:background .3s}
+.status-dot.live{background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.btn-reset{font-family:'JetBrains Mono',monospace;font-size:.72rem;padding:.35rem .9rem;border-radius:6px;border:1px solid rgba(255,68,85,.4);background:rgba(255,68,85,.08);color:#ff6677;cursor:pointer;transition:background .2s}
+.btn-reset:hover{background:rgba(255,68,85,.2)}
+
+/* LAYOUT */
+main{position:relative;z-index:1;padding:1.25rem 1.5rem 2rem;display:grid;grid-template-columns:1fr 320px;grid-template-rows:auto 1fr;gap:1.25rem;max-width:1400px;margin:0 auto}
+
+/* SUMMARY BAR */
+.summary-bar{grid-column:1/-1;display:flex;gap:1rem;flex-wrap:wrap}
+.stat-card{flex:1;min-width:140px;background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:1rem 1.2rem;display:flex;flex-direction:column;gap:.25rem}
+.stat-label{font-size:.7rem;color:var(--gray);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.06em}
+.stat-value{font-family:'Unbounded',sans-serif;font-size:1.7rem;font-weight:900}
+.stat-sub{font-size:.72rem;color:var(--gray)}
+
+/* QUESTION PANELS */
+.questions-grid{display:flex;flex-direction:column;gap:1rem}
+.q-panel{background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:1.2rem 1.4rem;transition:border-color .3s}
+.q-panel.has-votes{border-color:rgba(0,212,255,.28)}
+.q-panel-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.85rem;gap:.5rem}
+.q-num-badge{font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--cyan);background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);border-radius:6px;padding:.2rem .55rem;flex-shrink:0}
+.q-text-sm{font-size:.9rem;font-weight:600;line-height:1.45;flex:1}
+.q-total-badge{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--white);background:rgba(255,255,255,.08);border-radius:99px;padding:.2rem .65rem;white-space:nowrap}
+
+/* BARS */
+.bars{display:flex;flex-direction:column;gap:.42rem}
+.bar-row{display:grid;grid-template-columns:28px 1fr 44px;align-items:center;gap:.55rem}
+.bar-key{font-family:'JetBrains Mono',monospace;font-size:.7rem;border-radius:4px;padding:.14rem .38rem;text-align:center;font-weight:700;flex-shrink:0;color:var(--navy)}
+.bar-track{height:22px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;position:relative}
+.bar-fill{height:100%;border-radius:6px;transition:width .55s cubic-bezier(.4,0,.2,1);min-width:0;position:relative}
+.bar-fill.correct-bar::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent);animation:shimmer 1.8s infinite}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.bar-pct{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--gray);text-align:right}
+.correct-label{font-size:.72rem;color:var(--green);font-family:'JetBrains Mono',monospace;margin-top:.55rem}
+
+/* PER-QUESTION CORRECT/WRONG/TIMEOUT SUMMARY */
+.q-outcome-row{display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap}
+.outcome-chip{display:flex;align-items:center;gap:.35rem;font-family:'JetBrains Mono',monospace;font-size:.72rem;padding:.28rem .7rem;border-radius:99px;font-weight:700}
+.outcome-chip.oc-correct{background:rgba(0,230,118,.12);border:1px solid rgba(0,230,118,.3);color:var(--green)}
+.outcome-chip.oc-wrong  {background:rgba(255,23,68,.08);border:1px solid rgba(255,23,68,.25);color:#ff6680}
+.outcome-chip.oc-timeout{background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.25);color:var(--gold)}
+
+/* SIDEBAR */
+.sidebar{display:flex;flex-direction:column;gap:1rem}
+.big-count-panel{background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:1.2rem;text-align:center}
+.big-count-num{font-family:'Unbounded',sans-serif;font-size:3.5rem;font-weight:900;background:linear-gradient(135deg,var(--cyan),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1}
+.big-count-label{font-size:.75rem;color:var(--gray);margin-top:.35rem}
+
+.feed-panel{background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:1rem 1.2rem;flex:1;overflow:hidden;display:flex;flex-direction:column}
+.panel-title{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--cyan);margin-bottom:.7rem;letter-spacing:.04em}
+.feed-list{display:flex;flex-direction:column;gap:.3rem;overflow-y:auto;max-height:380px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.1) transparent}
+.feed-item{display:flex;gap:.5rem;align-items:baseline;font-size:.78rem;animation:fadeIn .3s ease;border-bottom:1px solid rgba(255,255,255,.04);padding-bottom:.28rem}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.feed-time{font-family:'JetBrains Mono',monospace;color:var(--gray);font-size:.68rem;flex-shrink:0}
+.feed-name{color:var(--white);font-weight:600;flex-shrink:0;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.feed-badge{font-family:'JetBrains Mono',monospace;font-size:.65rem;padding:.1rem .4rem;border-radius:4px;color:var(--navy);font-weight:700;flex-shrink:0}
+
+@media(max-width:900px){main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<header>
+  <div class="header-title">Presenter View — LLM &amp; RAG Quiz</div>
+  <div class="header-meta">
+    <div class="meta-chip"><span class="status-dot" id="status-dot"></span><span id="status-text">Bağlanıyor...</span></div>
+    <div class="meta-chip" id="hdr-students">0 öğrenci</div>
+    <div class="meta-chip" id="hdr-clock" style="font-size:.65rem"></div>
+    <button class="btn-reset" onclick="resetAll()">Sıfırla</button>
+  </div>
+</header>
+
+<main>
+  <div class="summary-bar">
+    <div class="stat-card">
+      <div class="stat-label">Katılımcı</div>
+      <div class="stat-value" id="stat-students" style="color:var(--cyan)">0</div>
+      <div class="stat-sub">benzersiz öğrenci</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Toplam Yanıt</div>
+      <div class="stat-value" id="stat-total" style="color:var(--gold)">0</div>
+      <div class="stat-sub">5 soru × öğrenci</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Doğru Oranı</div>
+      <div class="stat-value" id="stat-rate" style="color:var(--green)">—</div>
+      <div class="stat-sub">tüm sorular geneli</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Süre Doldu</div>
+      <div class="stat-value" id="stat-timeout" style="color:var(--gold)">0</div>
+      <div class="stat-sub">yanıtsız bırakılan</div>
+    </div>
+  </div>
+
+  <div class="questions-grid" id="questions-grid"></div>
+
+  <div class="sidebar">
+    <div class="big-count-panel">
+      <div class="big-count-num" id="big-count">0</div>
+      <div class="big-count-label">öğrenci katıldı</div>
+    </div>
+    <div class="feed-panel">
+      <div class="panel-title">// canlı yanıt akışı</div>
+      <div class="feed-list" id="feed-list">
+        <div style="color:var(--gray);font-size:.75rem;text-align:center;padding:1rem 0">Henüz yanıt yok...</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  SUPABASE BAĞLANTISI — kendi değerlerinizi buraya yazın
+// ══════════════════════════════════════════════════════════════
+const SUPABASE_URL      = "https://dkzlriwsbxmskhmxrzxm.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_qDX2UmlZVp6vF7GA-SWHzQ_UeV_-q54";
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ══════════════════════════════════════════════════════════════
+//  QUIZ META (sadece doğru cevap & metin lazım)
+// ══════════════════════════════════════════════════════════════
+const QUESTIONS = [
+  { text:"5 makine, 5 işi 5 dakikada yapıyorsa; 100 makine 100 işi kaç dakikada yapar?",              options:["5 dakika","100 dakika","20 dakika","500 dakika"], correct:0 },
+  { text:"Bir kalem ve bir defter toplam 110 TL. Defter, kalemden 100 TL daha pahalı. Kalem kaç TL?", options:["10 TL","5 TL","15 TL","20 TL"],                  correct:1 },
+  { text:"Adil bir madeni para 10 kez üst üste yazı geldi. 11. atışta tura gelme olasılığı nedir?",    options:["%50'den fazla","Tam %50","%50'den az","Hesaplanamaz"], correct:1 },
+  { text:"Bir yarışta ikinciyi geçersen kaçıncı olursun?",                                             options:["Birinci","İkinci","Üçüncü","Geçemezsin"],        correct:1 },
+  { text:"Meryem'in annesinin dört çocuğu var: Nisan, Mayıs, Haziran ve ...?",                         options:["Temmuz","Meryem","Temmuz ya da Ağustos","Bilgi yetersiz"], correct:1 },
+];
+
+const OPT_KEYS   = ["A","B","C","D"];
+const OPT_COLORS = ["var(--A)","var(--B)","var(--C)","var(--D)"];
+
+// ══════════════════════════════════════════════════════════════
+//  IN-MEMORY STATE (Supabase'den rebuild edilir)
+// ══════════════════════════════════════════════════════════════
+let votes = Array.from({length:5}, () => ({A:0,B:0,C:0,D:0,timeout:0,total:0}));
+let students = new Set();
+let feedItems = [];   // [{time, student, q, choice, color}]
+
+// ══════════════════════════════════════════════════════════════
+//  DOM BUILD
+// ══════════════════════════════════════════════════════════════
+function buildGrid() {
+  const grid = document.getElementById("questions-grid");
+  grid.innerHTML = "";
+  QUESTIONS.forEach((q, qi) => {
+    const panel = document.createElement("div");
+    panel.className = "q-panel";
+    panel.id = `q-panel-${qi}`;
+    let barsHtml = "";
+    q.options.forEach((opt, oi) => {
+      const isC = oi === q.correct;
+      barsHtml += `
+        <div class="bar-row">
+          <div class="bar-key" style="background:${OPT_COLORS[oi]}">${OPT_KEYS[oi]}</div>
+          <div class="bar-track">
+            <div class="bar-fill${isC?" correct-bar":""}" id="bar-${qi}-${oi}"
+                 style="width:0%;background:${OPT_COLORS[oi]};opacity:${isC?1:.65}"></div>
+          </div>
+          <div class="bar-pct" id="pct-${qi}-${oi}">0%</div>
+        </div>`;
+    });
+    barsHtml += `
+      <div class="bar-row">
+        <div class="bar-key" style="background:var(--TO);color:var(--white)">⏱</div>
+        <div class="bar-track"><div class="bar-fill" id="bar-${qi}-to" style="width:0%;background:var(--TO);opacity:.5"></div></div>
+        <div class="bar-pct" id="pct-${qi}-to">0%</div>
+      </div>`;
+    panel.innerHTML = `
+      <div class="q-panel-head">
+        <span class="q-num-badge">S${qi+1}</span>
+        <span class="q-text-sm">${q.text}</span>
+        <span class="q-total-badge" id="qtotal-${qi}">0 yanıt</span>
+      </div>
+      <div class="bars">${barsHtml}</div>
+      <div class="correct-label">Doğru cevap: ${OPT_KEYS[q.correct]} — ${q.options[q.correct]}</div>
+      <div class="q-outcome-row" id="outcome-${qi}">
+        <span class="outcome-chip oc-correct" id="oc-correct-${qi}">✓ Doğru: 0</span>
+        <span class="outcome-chip oc-wrong"   id="oc-wrong-${qi}"  >✗ Yanlış: 0</span>
+        <span class="outcome-chip oc-timeout" id="oc-timeout-${qi}" >⏱ Boş: 0</span>
+      </div>`;
+    grid.appendChild(panel);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════════════
+function render() {
+  const studentCount = students.size;
+  document.getElementById("stat-students").textContent = studentCount;
+  document.getElementById("big-count").textContent     = studentCount;
+  document.getElementById("hdr-students").textContent  = `${studentCount} öğrenci`;
+
+  let totalAnswers = 0, totalCorrect = 0, totalTimeout = 0;
+
+  votes.forEach((v, qi) => {
+    const total = v.total;
+    totalAnswers  += total;
+    totalTimeout  += v.timeout;
+    const ck = OPT_KEYS[QUESTIONS[qi].correct];
+    totalCorrect  += v[ck] || 0;
+
+    document.getElementById(`q-panel-${qi}`).classList.toggle("has-votes", total > 0);
+    document.getElementById(`qtotal-${qi}`).textContent = `${total} yanıt`;
+
+    QUESTIONS[qi].options.forEach((_, oi) => {
+      const pct = total > 0 ? Math.round((v[OPT_KEYS[oi]]||0)/total*100) : 0;
+      document.getElementById(`bar-${qi}-${oi}`).style.width = pct+"%";
+      document.getElementById(`pct-${qi}-${oi}`).textContent = pct+"%";
+    });
+    const toPct = total > 0 ? Math.round(v.timeout/total*100) : 0;
+    document.getElementById(`bar-${qi}-to`).style.width = toPct+"%";
+    document.getElementById(`pct-${qi}-to`).textContent = toPct+"%";
+
+    // Doğru / Yanlış / Boş sayaçları
+    const correctKey   = OPT_KEYS[QUESTIONS[qi].correct];
+    const correctCount = v[correctKey] || 0;
+    const wrongCount   = total - correctCount - v.timeout;
+    const pctCo = total > 0 ? Math.round(correctCount/total*100) : 0;
+    const pctWr = total > 0 ? Math.round(wrongCount/total*100)   : 0;
+    const pctTo = total > 0 ? Math.round(v.timeout/total*100)    : 0;
+    document.getElementById(`oc-correct-${qi}`).textContent  = `✓ Doğru: ${correctCount} (%${pctCo})`;
+    document.getElementById(`oc-wrong-${qi}`).textContent    = `✗ Yanlış: ${wrongCount} (%${pctWr})`;
+    document.getElementById(`oc-timeout-${qi}`).textContent  = `⏱ Boş: ${v.timeout} (%${pctTo})`;
+  });
+
+  document.getElementById("stat-total").textContent   = totalAnswers;
+  document.getElementById("stat-timeout").textContent = totalTimeout;
+  const rate = totalAnswers > 0 ? Math.round(totalCorrect/totalAnswers*100) : null;
+  document.getElementById("stat-rate").textContent    = rate !== null ? `%${rate}` : "—";
+}
+
+function renderFeed() {
+  const list = document.getElementById("feed-list");
+  if (feedItems.length === 0) {
+    list.innerHTML = '<div style="color:var(--gray);font-size:.75rem;text-align:center;padding:1rem 0">Henüz yanıt yok...</div>';
+    return;
+  }
+  list.innerHTML = [...feedItems].reverse().slice(0,40).map(ev =>
+    `<div class="feed-item">
+       <span class="feed-time">${ev.time}</span>
+       <span class="feed-name">${ev.student}</span>
+       <span style="color:var(--gray);font-size:.7rem">S${ev.q}</span>
+       <span class="feed-badge" style="background:${ev.color}">${ev.choice}</span>
+     </div>`
+  ).join("");
+}
+
+// ══════════════════════════════════════════════════════════════
+//  APPLY ROW (tek bir quiz_answers satırını state'e yansıt)
+// ══════════════════════════════════════════════════════════════
+function applyRow(row) {
+  const qi   = row.question_index;
+  const ci   = row.choice_index;
+  const tout = row.timed_out;
+  const sid  = row.student_id;
+
+  if (qi < 0 || qi >= 5) return;
+
+  students.add(sid);
+  votes[qi].total++;
+  if (tout) {
+    votes[qi].timeout++;
+  } else if (ci >= 0 && ci < 4) {
+    votes[qi][OPT_KEYS[ci]]++;
+  }
+
+  // Feed entry
+  let choice = "?", color = "var(--TO)";
+  if (tout) { choice = "⏱"; }
+  else if (ci >= 0 && ci < 4) { choice = OPT_KEYS[ci]; color = OPT_COLORS[ci]; }
+
+  const ts = row.created_at
+    ? new Date(row.created_at).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})
+    : new Date().toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+
+  feedItems.push({ time: ts, student: sid, q: qi+1, choice, color });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  INITIAL LOAD — mevcut verileri çek
+// ══════════════════════════════════════════════════════════════
+async function loadInitialData() {
+  const { data, error } = await db
+    .from("quiz_answers")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  if (error) { console.error("Initial load error:", error); return; }
+
+  // Reset state
+  votes    = Array.from({length:5}, () => ({A:0,B:0,C:0,D:0,timeout:0,total:0}));
+  students = new Set();
+  feedItems = [];
+
+  (data || []).forEach(applyRow);
+  render();
+  renderFeed();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  REALTIME SUBSCRIPTION
+// ══════════════════════════════════════════════════════════════
+function subscribeRealtime() {
+  const dot = document.getElementById("status-dot");
+  const txt = document.getElementById("status-text");
+
+  db.channel("quiz_answers_changes")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "quiz_answers" },
+      (payload) => {
+        applyRow(payload.new);
+        render();
+        renderFeed();
+      }
+    )
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        dot.classList.add("live");
+        txt.textContent = "Canlı";
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        dot.classList.remove("live");
+        txt.textContent = "Bağlantı hatası — yenileniyor...";
+        setTimeout(() => location.reload(), 4000);
+      } else {
+        dot.classList.remove("live");
+        txt.textContent = status;
+      }
+    });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  RESET
+// ══════════════════════════════════════════════════════════════
+async function resetAll() {
+  if (!confirm("Tüm yanıtları Supabase'den sil?")) return;
+  const { error } = await db.from("quiz_answers").delete().neq("id", 0);
+  if (error) { alert("Silme hatası: " + error.message); return; }
+  votes    = Array.from({length:5}, () => ({A:0,B:0,C:0,D:0,timeout:0,total:0}));
+  students = new Set();
+  feedItems = [];
+  render();
+  renderFeed();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  CLOCK
+// ══════════════════════════════════════════════════════════════
+function tick() {
+  document.getElementById("hdr-clock").textContent =
+    new Date().toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+setInterval(tick, 1000);
+tick();
+
+// ══════════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════════
+buildGrid();
+loadInitialData().then(subscribeRealtime);
+</script>
+</body>
+</html>

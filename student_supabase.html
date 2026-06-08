@@ -178,16 +178,7 @@
 
 <script>
 // ══════════════════════════════════════════════════════════════
-//  SUPABASE BAĞLANTISI — kendi değerlerinizi buraya yazın
-// ══════════════════════════════════════════════════════════════
-const SUPABASE_URL      = "https://dkzlriwsbxmskhmxrzxm.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_qDX2UmlZVp6vF7GA-SWHzQ_UeV_-q54";
-
-const { createClient } = supabase;
-const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// ══════════════════════════════════════════════════════════════
-//  SORULAR
+//  SORULAR — script'in en üstünde olmalı
 // ══════════════════════════════════════════════════════════════
 const QUESTIONS = [
   {
@@ -233,6 +224,20 @@ const QUESTIONS = [
 ];
 
 // ══════════════════════════════════════════════════════════════
+//  SUPABASE BAĞLANTISI
+// ══════════════════════════════════════════════════════════════
+const SUPABASE_URL      = "https://dkzlriwsbxmskhmxrzxm.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_qDX2UmlZVp6vF7GA-SWHzQ_UeV_-q54";
+
+let db = null;
+try {
+  const { createClient } = supabase;
+  db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch(e) {
+  console.warn("Supabase bağlanamadı, quiz offline çalışacak:", e);
+}
+
+// ══════════════════════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════════════════════
 let currentQ      = 0;
@@ -245,6 +250,7 @@ let studentId     = "anon_" + Math.random().toString(36).slice(2,7);
 //  SUPABASE — cevap kaydet
 // ══════════════════════════════════════════════════════════════
 async function submitAnswer(questionIndex, choiceIndex, timedOut) {
+  if (!db) return;
   try {
     const { error } = await db.from("quiz_answers").insert({
       student_id:     studentId,

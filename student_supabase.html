@@ -40,11 +40,6 @@
   .instructor-avatar { width:46px; height:46px; border-radius:50%; background:linear-gradient(135deg,var(--cyan),var(--gold)); display:flex; align-items:center; justify-content:center; font-family:'Unbounded',sans-serif; font-size:1rem; color:var(--navy); font-weight:900; flex-shrink:0; }
   .instructor-name { font-weight:600; font-size:.95rem; }
   .instructor-role { font-size:.78rem; color:var(--gray); margin-top:.15rem; }
-  .name-wrap { display:flex; flex-direction:column; gap:.6rem; width:100%; max-width:360px; }
-  .name-label { font-size:.82rem; color:var(--gray); font-family:'JetBrains Mono',monospace; }
-  .name-input { background:var(--navy-mid); border:1.5px solid rgba(0,212,255,.3); border-radius:10px; padding:.85rem 1.1rem; color:var(--white); font-family:'Space Grotesk',sans-serif; font-size:1rem; outline:none; width:100%; transition:border-color .2s; }
-  .name-input:focus { border-color:var(--cyan); }
-  .name-input::placeholder { color:var(--gray); }
   .btn-primary { font-family:'Unbounded',sans-serif; font-size:.85rem; font-weight:700; letter-spacing:.04em; padding:1rem 2.5rem; border-radius:8px; border:none; cursor:pointer; background:linear-gradient(135deg,var(--cyan),var(--cyan-dim)); color:var(--navy); transition:transform .15s,box-shadow .15s; box-shadow:0 0 32px rgba(0,212,255,.3); }
   .btn-primary:hover { transform:translateY(-2px); box-shadow:0 0 48px rgba(0,212,255,.45); }
   .btn-primary:disabled { opacity:.5; cursor:not-allowed; transform:none; }
@@ -121,10 +116,6 @@
       <div class="instructor-name">Arş. Gör. Merve DEDE</div>
       <div class="instructor-role">İstanbul Beykent Üniversitesi</div>
     </div>
-  </div>
-  <div class="name-wrap">
-    <div class="name-label">Adınızı ve Soyadınızı Girin</div>
-    <input class="name-input" id="name-input" type="text" placeholder="Adınız Soyadınız" maxlength="40" onkeydown="if(event.key==='Enter') startQuiz()">
   </div>
   <button class="btn-primary" onclick="startQuiz()">Teste Başla →</button>
 </div>
@@ -271,8 +262,6 @@ async function submitAnswer(questionIndex, choiceIndex, timedOut) {
 //  QUIZ
 // ══════════════════════════════════════════════════════════════
 function startQuiz() {
-  const nameVal = document.getElementById("name-input").value.trim();
-  if (nameVal) studentId = nameVal;
   currentQ = 0; results = [];
   showScreen("screen-quiz");
   loadQuestion();

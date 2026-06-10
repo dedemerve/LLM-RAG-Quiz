@@ -258,8 +258,6 @@ async function submitAnswer(questionIndex, choiceIndex, timedOut) {
 //  QUIZ
 // ══════════════════════════════════════════════════════════════
 function startQuiz() {
-  const nameVal = document.getElementById("name-input").value.trim();
-  if (nameVal) studentId = nameVal;
   currentQ = 0; results = [];
   showScreen("screen-quiz");
   loadQuestion();
